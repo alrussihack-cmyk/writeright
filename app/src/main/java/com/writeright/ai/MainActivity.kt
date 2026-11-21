@@ -17,10 +17,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DeleteOutline
-import androidx.compose.material.icons.rounded.Eraser
 import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.Menu
-import androidx.compose.material.icons.rounded.Pen
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Undo
 import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material3.*
@@ -163,8 +162,8 @@ private fun WritingPage(
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
             Row(Modifier.border(5.dp, Dark, RoundedCornerShape(26.dp)).padding(6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ToolButton(Icons.Rounded.Pen, tool == Tool.PEN) { onTool(Tool.PEN) }
-                ToolButton(Icons.Rounded.Eraser, tool == Tool.ERASER) { onTool(Tool.ERASER) }
+                ToolButton(Icons.Rounded.Edit, tool == Tool.PEN) { onTool(Tool.PEN) }
+                ToolButton(Icons.Rounded.DeleteOutline, tool == Tool.ERASER) { onTool(Tool.ERASER) }
                 ToolButton(Icons.Rounded.Undo, false) { if (strokes.isNotEmpty()) onStrokes(strokes.dropLast(1)) }
             }
             Button(onClick = onMonitor, enabled = !busy, Modifier.height(62.dp), colors = ButtonDefaults.buttonColors(containerColor = Yellow, contentColor = Dark), shape = RoundedCornerShape(50)) {
@@ -355,7 +354,7 @@ private fun correctionList(text: String): List<WordFix> {
         "wierd" to WordFix("wierd", "weird", "في كلمة weird يأتي e قبل i.", "احفظ شكل الكلمة weird كما هي.")
     )
     return text.split(Regex("\\\\s+"))
-        .map { it.trim().trim(',', '.', '!', '?', ';', ':', '"', '\\'').lowercase(Locale.US) }
+        .map { it.trim().trim(',', '.', '!', '?', ';', ':', '"').lowercase(Locale.US) }
         .filter { rules.containsKey(it) }.distinct().map { rules.getValue(it) }
 }
 
