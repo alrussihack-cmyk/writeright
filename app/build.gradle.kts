@@ -11,8 +11,8 @@ android {
         applicationId = "com.writeright.ai"
         minSdk = 26
         targetSdk = 35
-        versionCode = 10
-        versionName = "1.0.0"
+        versionCode = 11
+        versionName = "1.1.0"
     }
 
     buildFeatures { compose = true }
@@ -31,8 +31,8 @@ dependencies {
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.foundation:foundation")
+    implementation("androidx.compose.animation:animation")
     implementation("androidx.compose.material3:material3")
-    implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("com.google.mlkit:digital-ink-recognition:19.0.0")
     debugImplementation("androidx.compose.ui:ui-tooling")

@@ -3,12 +3,18 @@
 A fresh Android-native rebuild based on the three supplied reference screens.
 
 ## Product scope
-Exactly three app pages:
-1. Writing Board
-2. Correction Results
-3. Error Explanation
+Three states of one screen (matching the reference screenshots):
+1. Writing board: handwrite English; the AI watches and reads the board after you pause.
+2. Results on the board: your own handwriting stays, a red oval circles the wrong letters and the corrected word appears above in green. A card at the bottom lists the mistakes.
+3. Explanation sheet: one mistake at a time (wrong vs right word, letter tiles, a memory tip, speaker button).
 
 The header menu and theme toggle are overlays/actions, not additional pages.
+
+## How a correction is found
+Strokes are grouped into lines and words, each line is read by ML Kit, and each word is checked against a built-in list of common misspellings (`Spelling.kt`). Add a line `wrong=right` there to teach it a new word. The explanation of which letters are wrong is generated from the difference between the two spellings.
+
+## Fonts
+Cairo (UI + Arabic) and Kalam (handwriting look), both SIL Open Font License, bundled in `res/font`.
 
 ## Stack
 - Kotlin

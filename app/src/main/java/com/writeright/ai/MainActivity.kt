@@ -3,407 +3,892 @@ package com.writeright.ai
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ArrowForward
+import androidx.compose.material.icons.rounded.ChevronLeft
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.DeleteOutline
-import androidx.compose.material.icons.rounded.LightMode
-import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.LightMode
+import androidx.compose.material.icons.rounded.Lightbulb
+import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material.icons.rounded.Undo
 import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.window.PopupProperties
-import com.google.mlkit.common.model.DownloadConditions
-import com.google.mlkit.common.model.RemoteModelManager
-import com.google.mlkit.vision.digitalink.recognition.DigitalInkRecognition
-import com.google.mlkit.vision.digitalink.recognition.DigitalInkRecognitionModel
-import com.google.mlkit.vision.digitalink.recognition.DigitalInkRecognitionModelIdentifier
-import com.google.mlkit.vision.digitalink.recognition.DigitalInkRecognizer
-import com.google.mlkit.vision.digitalink.recognition.DigitalInkRecognizerOptions
-import com.google.mlkit.vision.digitalink.recognition.Ink
+import kotlinx.coroutines.delay
 import java.util.Locale
 
-private val Mint = Color(0xFF22D7B2)
-private val Dark = Color(0xFF10231D)
-private val Rule = Color(0xFFCDE9E0)
-private val Muted = Color(0xFF49665E)
-private val Yellow = Color(0xFFFFD94E)
-private val PaleMint = Color(0xFFF0FFF9)
-private val Red = Color(0xFFE52E43)
-private val PaleRed = Color(0xFFFFE7E5)
+// ------------------------------------------------------------------ look & feel
+
+private val Mint = Color(0xFF2EE3B8)
+private val Dark = Color(0xFF10201B)
+private val Yellow = Color(0xFFFFD84A)
+private val PaleRed = Color(0xFFFFE3E3)
+private val Red = Color(0xFFD9273C)
+private val PaleTile = Color(0xFFDDF6EE)
+private val TipYellow = Color(0xFFFFF4C7)
+private val Scrim = Color(0x5A10231D)
+
+@Immutable
+private data class Palette(
+    val bg: Color, val ink: Color, val edge: Color, val shadow: Color, val rule: Color,
+    val surface: Color, val sheet: Color, val muted: Color, val good: Color
+)
+
+private val LightPalette = Palette(
+    bg = Color.White, ink = Dark, edge = Dark, shadow = Dark, rule = Color(0xFFD0E8E0),
+    surface = Color.White, sheet = Color(0xFFF1FFFA), muted = Color(0xFF4A665E), good = Color(0xFF0B7A5E)
+)
+private val DarkPalette = Palette(
+    bg = Color(0xFF13201C), ink = Color(0xFFEAF7F2), edge = Color(0xFFEAF7F2), shadow = Color(0xFF000000),
+    rule = Color(0xFF2A4039), surface = Color(0xFF1C2D27), sheet = Color(0xFF182823),
+    muted = Color(0xFF9DB8AF), good = Color(0xFF4EE8B8)
+)
+private val LocalPalette = staticCompositionLocalOf { LightPalette }
+
+private val Cairo = FontFamily(
+    listOf(400, 600, 700, 900).map { w ->
+        Font(R.font.cairo, FontWeight(w), variationSettings = FontVariation.Settings(FontVariation.weight(w)))
+    }
+)
+private val Hand = FontFamily(
+    Font(R.font.kalam_regular, FontWeight.Normal),
+    Font(R.font.kalam_bold, FontWeight.Bold)
+)
+
+/** Hard offset shadow + thick outline: the "sticker" look used across the app. */
+private fun Modifier.brutal(
+    shape: Shape, fill: Color, edge: Color, shadow: Color,
+    width: Dp = 2.5.dp, offset: Dp = 4.dp
+): Modifier = this
+    .drawBehind {
+        if (offset > 0.dp) {
+            val o = offset.toPx()
+            val outline = shape.createOutline(size, layoutDirection, this)
+            translate(o, o) { drawOutline(outline, color = shadow) }
+        }
+    }
+    .background(fill, shape)
+    .border(width, edge, shape)
+
+private enum class Mode { WRITE, RESULTS, EXPLAIN }
+private enum class Tool { PEN, ERASER }
+
+private fun mistakesTitle(n: Int): String = when (n) {
+    1 -> "استنى! فيه غلطة"
+    2 -> "استنى! فيه غلطتين"
+    in 3..10 -> "استنى! فيه ${toArabicDigits(n)} غلطات"
+    else -> "استنى! فيه ${toArabicDigits(n)} غلطة"
+}
+
+private fun mistakesChip(n: Int): String = if (n == 1) "١ غلطة" else "${toArabicDigits(n)} غلطات"
+
+// ------------------------------------------------------------------ activity
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
         setContent { WriteRightApp() }
     }
 }
 
-private enum class Page { WRITE, RESULTS, EXPLANATION }
-private enum class Tool { PEN, ERASER }
-private data class PointData(val x: Float, val y: Float, val time: Long)
-private data class StrokeData(val points: List<PointData>, val eraser: Boolean = false)
-private data class WordFix(val original: String, val corrected: String, val explanation: String, val tip: String)
-
 @Composable
 private fun WriteRightApp() {
     val context = LocalContext.current
-    var page by remember { mutableStateOf(Page.WRITE) }
+    val density = LocalDensity.current.density
+    val rowGap = ROW_GAP_DP * density
+
     var dark by remember { mutableStateOf(false) }
     var menu by remember { mutableStateOf(false) }
     var tool by remember { mutableStateOf(Tool.PEN) }
     var strokes by remember { mutableStateOf(emptyList<StrokeData>()) }
-    var recognized by remember { mutableStateOf("") }
-    var fixes by remember { mutableStateOf(emptyList<WordFix>()) }
+    var demo by remember { mutableStateOf<Demo?>(null) }
+    var analysis by remember { mutableStateOf<Analysis?>(null) }
+    var mode by remember { mutableStateOf(Mode.WRITE) }
     var selected by remember { mutableIntStateOf(0) }
     var status by remember { mutableStateOf("") }
+    var statusIsError by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
-    val tts = remember { TextToSpeech(context) {} }
-    DisposableEffect(Unit) { onDispose { tts.shutdown() } }
+    var lastAnalyzed by remember { mutableStateOf<List<StrokeData>?>(null) }
 
-    MaterialTheme(colorScheme = if (dark) darkColorScheme(primary = Mint, background = Color(0xFF15221E), surface = Color(0xFF1B3029)) else lightColorScheme(primary = Dark)) {
-        when (page) {
-            Page.WRITE -> WritingPage(
-                dark = dark, strokes = strokes, tool = tool, status = status, busy = busy, menu = menu,
-                onMenu = { menu = it }, onTheme = { dark = !dark },
-                onTool = { tool = it }, onStrokes = { strokes = it }, onStatus = { status = it },
-                onExample = {
-                    recognized = "I recieve an emale every day"
-                    fixes = correctionList(recognized)
-                    page = Page.RESULTS
-                    status = ""
-                },
-                onMonitor = {
-                    if (strokes.isEmpty()) status = "اكتب كلمة أو جملة أولاً، ثم اضغط على زر المراقبة."
-                    else {
-                        busy = true
-                        status = "جاري تجهيز نموذج التعرف على الكتابة..."
-                        recognize(context, strokes, { status = it }, { text ->
-                            busy = false
-                            recognized = text
-                            fixes = correctionList(text)
-                            status = ""
-                            page = Page.RESULTS
-                        }, { error ->
-                            busy = false
-                            status = error
-                        })
-                    }
+    val handRegular = remember { context.resources.getFont(R.font.kalam_regular) }
+    val ttsHolder = remember { arrayOfNulls<TextToSpeech>(1) }
+    DisposableEffect(Unit) {
+        ttsHolder[0] = TextToSpeech(context) { code ->
+            if (code == TextToSpeech.SUCCESS) ttsHolder[0]?.language = Locale.US
+        }
+        onDispose { ttsHolder[0]?.shutdown() }
+    }
+
+    fun clearBoard() {
+        strokes = emptyList()
+        demo = null
+        analysis = null
+        mode = Mode.WRITE
+        status = ""
+        lastAnalyzed = null
+    }
+
+    fun dismissResults() {
+        demo = null
+        analysis = null
+        mode = Mode.WRITE
+    }
+
+    fun runAnalysis() {
+        if (strokes.isEmpty() || busy) return
+        val snapshot = strokes
+        busy = true
+        statusIsError = false
+        status = "جاري تجهيز القراءة..."
+        lastAnalyzed = snapshot
+        analyzeInk(
+            context, snapshot, density, rowGap,
+            onStatus = { statusIsError = false; status = it },
+            onSuccess = { result ->
+                busy = false
+                status = ""
+                if (snapshot === strokes) {
+                    analysis = result
+                    selected = 0
+                    mode = Mode.RESULTS
                 }
-            )
-            Page.RESULTS -> ResultsPage(
-                recognized = recognized, fixes = fixes,
-                onBack = { page = Page.WRITE },
-                onSelect = { selected = it; page = Page.EXPLANATION },
-                onRetry = { strokes = emptyList(); status = ""; page = Page.WRITE }
-            )
-            Page.EXPLANATION -> ExplanationPage(
-                fix = fixes.getOrNull(selected), index = selected, total = fixes.size,
-                onBack = { page = Page.RESULTS },
-                onWriteAgain = { strokes = emptyList(); status = ""; page = Page.WRITE },
-                onSpeak = { tts.speak(it, TextToSpeech.QUEUE_FLUSH, null, "word") }
-            )
-        }
-    }
-}
-
-@Composable
-private fun WritingPage(
-    dark: Boolean, strokes: List<StrokeData>, tool: Tool, status: String, busy: Boolean, menu: Boolean,
-    onMenu: (Boolean) -> Unit, onTheme: () -> Unit, onTool: (Tool) -> Unit,
-    onStrokes: (List<StrokeData>) -> Unit, onStatus: (String) -> Unit,
-    onExample: () -> Unit, onMonitor: () -> Unit
-) {
-    Column(Modifier.fillMaxSize().background(if (dark) Color(0xFF15221E) else Color.White)) {
-        Header(dark, menu, onMenu, onTheme, { onStrokes(emptyList()); onStatus("") }, onExample)
-        Box(Modifier.weight(1f).fillMaxWidth()) {
-            WritingCanvas(strokes, tool, onStrokes, Modifier.fillMaxSize())
-            if (strokes.isEmpty()) {
-                Column(Modifier.align(Alignment.Center).padding(horizontal = 25.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Text("write anything...", fontSize = 42.sp, fontFamily = FontFamily.Cursive, fontWeight = FontWeight.Bold, color = Muted, textAlign = TextAlign.Center)
-                    Text("اكتب أي كلمة أو جملة بالإنجليزي بإيدك، وأنا هصححها قدامك على اللوحة", fontSize = 19.sp, color = Muted, textAlign = TextAlign.Center, lineHeight = 29.sp)
-                }
-            }
-            if (status.isNotBlank()) {
-                Surface(Modifier.align(Alignment.TopCenter).padding(12.dp).fillMaxWidth(), color = if (busy) PaleMint else PaleRed, shape = RoundedCornerShape(14.dp), shadowElevation = 3.dp) {
-                    Text(status, Modifier.padding(12.dp), color = Dark, textAlign = TextAlign.Center, fontSize = 13.sp)
-                }
-            }
-        }
-        Button(onClick = onExample, Modifier.align(Alignment.CenterHorizontally).padding(vertical = 10.dp), colors = ButtonDefaults.buttonColors(containerColor = Dark, contentColor = Mint), shape = RoundedCornerShape(50)) {
-            Text("‹   شوف مثال تصحيح", fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 18.dp, vertical = 5.dp))
-        }
-        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-            Row(Modifier.border(5.dp, Dark, RoundedCornerShape(26.dp)).padding(6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ToolButton(Icons.Rounded.Edit, tool == Tool.PEN) { onTool(Tool.PEN) }
-                ToolButton(Icons.Rounded.DeleteOutline, tool == Tool.ERASER) { onTool(Tool.ERASER) }
-                ToolButton(Icons.Rounded.Undo, false) { if (strokes.isNotEmpty()) onStrokes(strokes.dropLast(1)) }
-            }
-            Button(onClick = onMonitor, enabled = !busy, Modifier.height(62.dp), colors = ButtonDefaults.buttonColors(containerColor = Yellow, contentColor = Dark), shape = RoundedCornerShape(50)) {
-                if (busy) CircularProgressIndicator(Modifier.size(20.dp), color = Dark, strokeWidth = 2.dp)
-                else Text("●  الـ AI بيراقب", fontSize = 16.sp, fontWeight = FontWeight.Black)
-            }
-        }
-    }
-}
-
-@Composable
-private fun Header(dark: Boolean, menu: Boolean, onMenu: (Boolean) -> Unit, onTheme: () -> Unit, onClear: () -> Unit, onExample: () -> Unit) {
-    Row(Modifier.fillMaxWidth().height(92.dp).padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-        HeaderIcon(Icons.Rounded.LightMode, onTheme)
-        Box(Modifier.clip(RoundedCornerShape(50)).background(Mint).border(6.dp, Dark, RoundedCornerShape(50)).padding(horizontal = 20.dp, vertical = 11.dp)) {
-            Text("Write Right AI", color = Dark, fontSize = 23.sp, fontWeight = FontWeight.Black)
-        }
-        Box {
-            HeaderIcon(Icons.Rounded.Menu) { onMenu(true) }
-            DropdownMenu(expanded = menu, onDismissRequest = { onMenu(false) }, properties = PopupProperties(focusable = true)) {
-                DropdownMenuItem(text = { Text("مسح اللوحة") }, leadingIcon = { Icon(Icons.Rounded.DeleteOutline, null) }, onClick = { onClear(); onMenu(false) })
-                DropdownMenuItem(text = { Text("عرض مثال التصحيح") }, onClick = { onExample(); onMenu(false) })
-            }
-        }
-    }
-    Box(Modifier.fillMaxWidth().height(3.dp).background(Rule))
-}
-
-@Composable
-private fun HeaderIcon(icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
-    Box(Modifier.size(58.dp).clip(RoundedCornerShape(20.dp)).background(Color.White).border(5.dp, Dark, RoundedCornerShape(20.dp)).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
-        Icon(icon, null, tint = Dark, modifier = Modifier.size(27.dp))
-    }
-}
-
-@Composable
-private fun WritingCanvas(strokes: List<StrokeData>, tool: Tool, onStrokes: (List<StrokeData>) -> Unit, modifier: Modifier) {
-    var active by remember { mutableStateOf(emptyList<PointData>()) }
-    Canvas(modifier.background(Color.White).pointerInput(tool, strokes) {
-        detectDragGestures(
-            onDragStart = { p -> active = listOf(PointData(p.x, p.y, System.currentTimeMillis())) },
-            onDrag = { change, _ ->
-                change.consume()
-                active = active + PointData(change.position.x, change.position.y, System.currentTimeMillis())
             },
-            onDragEnd = {
-                if (active.isNotEmpty()) onStrokes(strokes + StrokeData(active, tool == Tool.ERASER))
-                active = emptyList()
-            },
-            onDragCancel = { active = emptyList() }
+            onError = { message ->
+                busy = false
+                statusIsError = true
+                status = message
+            }
         )
-    }) {
-        var y = 0f
-        val gap = 72.dp.toPx()
-        while (y < size.height) {
-            drawLine(Rule, Offset(0f, y), Offset(size.width, y), 2.dp.toPx())
-            y += gap
-        }
-        fun paint(points: List<PointData>, erase: Boolean) {
-            if (points.isEmpty()) return
-            val path = Path().apply {
-                moveTo(points.first().x, points.first().y)
-                points.drop(1).forEach { lineTo(it.x, it.y) }
-            }
-            drawPath(path, if (erase) Color.White else Dark, style = Stroke(if (erase) 25.dp.toPx() else 4.2.dp.toPx(), cap = StrokeCap.Round))
-            if (points.size == 1) drawCircle(if (erase) Color.White else Dark, 2.5.dp.toPx(), Offset(points[0].x, points[0].y))
-        }
-        strokes.forEach { paint(it.points, it.eraser) }
-        paint(active, tool == Tool.ERASER)
     }
-}
 
-@Composable
-private fun ToolButton(icon: androidx.compose.ui.graphics.vector.ImageVector, selected: Boolean, onClick: () -> Unit) {
-    Box(Modifier.size(54.dp).clip(RoundedCornerShape(17.dp)).background(if (selected) Mint else Color.White).border(4.dp, Dark, RoundedCornerShape(17.dp)).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
-        Icon(icon, null, tint = Dark, modifier = Modifier.size(25.dp))
-    }
-}
-
-@Composable
-private fun ResultsPage(recognized: String, fixes: List<WordFix>, onBack: () -> Unit, onSelect: (Int) -> Unit, onRetry: () -> Unit) {
-    Column(Modifier.fillMaxSize().background(Color.White)) {
-        Row(Modifier.fillMaxWidth().height(92.dp).padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-            Surface(color = if (fixes.isEmpty()) PaleMint else PaleRed, shape = RoundedCornerShape(18.dp)) {
-                Text(if (fixes.isEmpty()) "ممتاز!" else fixes.size.toString() + " غلطات", Modifier.clickable { onBack() }.padding(horizontal = 17.dp, vertical = 12.dp), color = Dark, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-            }
-            BrandPill()
-            HeaderIcon(Icons.Rounded.Close, onBack)
+    // "الـ AI بيراقب": read the board by itself once the writer pauses.
+    LaunchedEffect(strokes, mode, busy) {
+        if (mode == Mode.WRITE && demo == null && !busy && strokes.isNotEmpty() && strokes !== lastAnalyzed) {
+            delay(2200)
+            runAnalysis()
         }
-        Box(Modifier.fillMaxWidth().height(3.dp).background(Rule))
-        Column(Modifier.weight(1f).fillMaxWidth()) {
-            Spacer(Modifier.height(28.dp))
-            Text(recognized, Modifier.fillMaxWidth().padding(horizontal = 20.dp), color = Dark, fontSize = 35.sp, fontFamily = FontFamily.Cursive, textAlign = TextAlign.Center, lineHeight = 62.sp)
-            Spacer(Modifier.height(16.dp))
-            fixes.forEachIndexed { index, fix ->
-                Column(Modifier.fillMaxWidth().clickable { onSelect(index) }.padding(horizontal = 22.dp, vertical = 8.dp)) {
-                    Text(fix.corrected, Modifier.fillMaxWidth(), color = Color(0xFF008866), fontSize = 35.sp, fontFamily = FontFamily.Cursive, textAlign = TextAlign.Center)
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                        Text(fix.original, color = Red, fontSize = 29.sp, fontFamily = FontFamily.Cursive)
-                        Text("   →   ", color = Dark, fontSize = 23.sp)
-                        Text(fix.corrected, color = Color(0xFF008866), fontSize = 29.sp, fontFamily = FontFamily.Cursive)
+    }
+
+    BackHandler(enabled = mode != Mode.WRITE) {
+        if (mode == Mode.EXPLAIN) mode = Mode.RESULTS else dismissResults()
+    }
+
+    val palette = if (dark) DarkPalette else LightPalette
+    CompositionLocalProvider(
+        LocalLayoutDirection provides LayoutDirection.Ltr,
+        LocalPalette provides palette
+    ) {
+        ProvideTextStyle(TextStyle(fontFamily = Cairo, color = palette.ink)) {
+            Box(Modifier.fillMaxSize().background(palette.bg)) {
+                Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars)) {
+                    BoardHeader(
+                        dark = dark,
+                        analysis = analysis.takeIf { mode != Mode.WRITE },
+                        menu = menu,
+                        onMenu = { menu = it },
+                        onTheme = { dark = !dark },
+                        onDismiss = { dismissResults() },
+                        onClear = { clearBoard() },
+                        onExample = {
+                            clearBoard()
+                            val d = buildDemo(handRegular, density, rowGap)
+                            demo = d
+                            analysis = d.analysis
+                            selected = 0
+                            mode = Mode.RESULTS
+                        }
+                    )
+                    Box(Modifier.weight(1f).fillMaxWidth()) {
+                        WritingBoard(
+                            strokes = strokes,
+                            tool = tool,
+                            demo = demo,
+                            analysis = analysis.takeIf { mode != Mode.WRITE },
+                            onStrokes = { next ->
+                                strokes = next
+                                if (mode != Mode.WRITE || demo != null) {
+                                    demo = null
+                                    analysis = null
+                                    mode = Mode.WRITE
+                                }
+                                if (!busy) status = ""
+                            },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                        if (status.isNotBlank()) {
+                            StatusBanner(status, statusIsError, Modifier.align(Alignment.TopCenter))
+                        }
+                        val blank = strokes.isEmpty() && demo == null
+                        AnimatedVisibility(
+                            visible = blank && mode == Mode.WRITE && status.isBlank(),
+                            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 14.dp),
+                            enter = fadeIn(), exit = fadeOut()
+                        ) {
+                            ExampleButton {
+                                clearBoard()
+                                val d = buildDemo(handRegular, density, rowGap)
+                                demo = d
+                                analysis = d.analysis
+                                selected = 0
+                                mode = Mode.RESULTS
+                            }
+                        }
+                        AnimatedVisibility(
+                            visible = mode == Mode.RESULTS && analysis != null,
+                            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 14.dp),
+                            enter = slideInVertically { it / 2 } + fadeIn(),
+                            exit = fadeOut()
+                        ) {
+                            analysis?.let { a ->
+                                ResultCard(a) { index -> selected = index; mode = Mode.EXPLAIN }
+                            }
+                        }
                     }
-                    Box(Modifier.fillMaxWidth().height(2.dp).background(Rule))
+                    Toolbar(
+                        tool = tool,
+                        busy = busy,
+                        onTool = { tool = it },
+                        onUndo = {
+                            if (demo != null) clearBoard()
+                            else if (strokes.isNotEmpty()) {
+                                strokes = strokes.dropLast(1)
+                                if (mode != Mode.WRITE) dismissResults()
+                            }
+                        },
+                        onWatch = {
+                            if (strokes.isEmpty()) {
+                                statusIsError = true
+                                status = "اكتب كلمة أو جملة الأول، وأنا هراجعها."
+                            } else {
+                                lastAnalyzed = null
+                                runAnalysis()
+                            }
+                        }
+                    )
+                }
+
+                val fix = analysis?.findings?.getOrNull(selected)?.fix
+                if (mode == Mode.EXPLAIN && fix != null) {
+                    ExplainSheet(
+                        fix = fix,
+                        index = selected,
+                        total = analysis?.findings?.size ?: 1,
+                        onDismiss = { mode = Mode.RESULTS },
+                        onWriteAgain = {
+                            val word = fix.corrected
+                            clearBoard()
+                            statusIsError = false
+                            status = "اكتب كلمة $word على اللوحة"
+                        },
+                        onSpeak = { ttsHolder[0]?.speak(fix.corrected, TextToSpeech.QUEUE_FLUSH, null, "word") }
+                    )
                 }
             }
-            if (fixes.isEmpty()) Text("ممتاز! لم نكتشف أخطاء إملائية في النص.", Modifier.fillMaxWidth().padding(28.dp), color = Color(0xFF008866), textAlign = TextAlign.Center, fontSize = 20.sp, fontWeight = FontWeight.Bold)
         }
-        if (fixes.isNotEmpty()) {
-            Surface(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 10.dp).clickable { onSelect(0) }, color = Mint, shape = RoundedCornerShape(26.dp), shadowElevation = 5.dp) {
-                Column(Modifier.padding(17.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("استنى! فيه " + fixes.size + " غلطات", color = Dark, fontSize = 22.sp, fontWeight = FontWeight.Black)
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(fixes) { fix -> Surface(color = Color.White, shape = RoundedCornerShape(50)) { Text(fix.original + " → " + fix.corrected, Modifier.padding(horizontal = 13.dp, vertical = 8.dp), color = Dark, fontWeight = FontWeight.Bold) } }
+    }
+}
+
+// ------------------------------------------------------------------ header
+
+@Composable
+private fun BoardHeader(
+    dark: Boolean,
+    analysis: Analysis?,
+    menu: Boolean,
+    onMenu: (Boolean) -> Unit,
+    onTheme: () -> Unit,
+    onDismiss: () -> Unit,
+    onClear: () -> Unit,
+    onExample: () -> Unit
+) {
+    Box(Modifier.fillMaxWidth().height(92.dp).padding(horizontal = 18.dp)) {
+        Box(Modifier.align(Alignment.CenterStart)) {
+            if (analysis == null) {
+                SquareButton(onTheme, if (dark) "الوضع الفاتح" else "الوضع الداكن") {
+                    Icon(if (dark) Icons.Rounded.DarkMode else Icons.Rounded.LightMode, null, Modifier.size(26.dp), tint = LocalPalette.current.ink)
+                }
+            } else {
+                CountChip(analysis.findings.size, onDismiss)
+            }
+        }
+        BrandPill(Modifier.align(Alignment.Center))
+        Box(Modifier.align(Alignment.CenterEnd)) {
+            SquareButton({ onMenu(true) }, "القائمة") {
+                Icon(Icons.Rounded.Menu, null, Modifier.size(26.dp), tint = LocalPalette.current.ink)
+            }
+            DropdownMenu(expanded = menu, onDismissRequest = { onMenu(false) }, properties = PopupProperties(focusable = true)) {
+                DropdownMenuItem(
+                    text = { Text("مسح اللوحة") },
+                    leadingIcon = { Icon(Icons.Rounded.DeleteOutline, null) },
+                    onClick = { onClear(); onMenu(false) }
+                )
+                DropdownMenuItem(
+                    text = { Text("شوف مثال تصحيح") },
+                    onClick = { onExample(); onMenu(false) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BrandPill(modifier: Modifier = Modifier) {
+    val p = LocalPalette.current
+    val shape = RoundedCornerShape(50)
+    Box(modifier.brutal(shape, Mint, p.edge, p.shadow, 3.dp, 5.dp).padding(horizontal = 20.dp, vertical = 9.dp)) {
+        Text("Write Right AI", color = Dark, fontSize = 21.sp, fontWeight = FontWeight.Black, maxLines = 1)
+    }
+}
+
+@Composable
+private fun SquareButton(onClick: () -> Unit, description: String, content: @Composable () -> Unit) {
+    val p = LocalPalette.current
+    val shape = RoundedCornerShape(18.dp)
+    Box(
+        Modifier.size(56.dp)
+            .brutal(shape, p.surface, p.edge, p.shadow, 2.5.dp, 4.dp)
+            .clip(shape)
+            .clickable(onClick = onClick)
+            .semantics { contentDescription = description },
+        contentAlignment = Alignment.Center
+    ) { content() }
+}
+
+@Composable
+private fun CountChip(count: Int, onClick: () -> Unit) {
+    val p = LocalPalette.current
+    val shape = RoundedCornerShape(18.dp)
+    val ok = count == 0
+    Box(
+        Modifier.height(56.dp)
+            .brutal(shape, if (ok) Mint else PaleRed, p.edge, p.shadow, 2.5.dp, 4.dp)
+            .clip(shape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(if (ok) "ممتاز" else mistakesChip(count), color = Dark, fontSize = 17.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+    }
+}
+
+// ------------------------------------------------------------------ board
+
+private fun DrawScope.drawInk(points: List<PointData>, color: Color, width: Float) {
+    if (points.isEmpty()) return
+    if (points.size == 1) {
+        drawCircle(color, width * 0.6f, Offset(points[0].x, points[0].y))
+        return
+    }
+    val path = Path()
+    path.moveTo(points[0].x, points[0].y)
+    if (points.size == 2) {
+        path.lineTo(points[1].x, points[1].y)
+    } else {
+        for (i in 1 until points.size - 1) {
+            val mx = (points[i].x + points[i + 1].x) / 2f
+            val my = (points[i].y + points[i + 1].y) / 2f
+            path.quadraticBezierTo(points[i].x, points[i].y, mx, my)
+        }
+        path.lineTo(points.last().x, points.last().y)
+    }
+    drawPath(path, color, style = Stroke(width, cap = StrokeCap.Round, join = StrokeJoin.Round))
+}
+
+@Composable
+private fun WritingBoard(
+    strokes: List<StrokeData>,
+    tool: Tool,
+    demo: Demo?,
+    analysis: Analysis?,
+    onStrokes: (List<StrokeData>) -> Unit,
+    modifier: Modifier
+) {
+    val p = LocalPalette.current
+    val context = LocalContext.current
+    val handBold = remember { context.resources.getFont(R.font.kalam_bold) }
+    val handRegular = remember { context.resources.getFont(R.font.kalam_regular) }
+
+    val strokesNow by rememberUpdatedState(strokes)
+    val toolNow by rememberUpdatedState(tool)
+    val onStrokesNow by rememberUpdatedState(onStrokes)
+    var active by remember { mutableStateOf(emptyList<PointData>()) }
+    var eraser by remember { mutableStateOf<Offset?>(null) }
+
+    // Corrections and circles appear together once the AI has read the board.
+    val reveal = remember { Animatable(0f) }
+    LaunchedEffect(analysis) {
+        reveal.snapTo(0f)
+        if (analysis != null) reveal.animateTo(1f, tween(500))
+    }
+
+    val demoPaint = remember(p.ink, demo?.sizePx) {
+        android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            typeface = handRegular
+            color = p.ink.toArgb()
+            textSize = demo?.sizePx ?: 40f
+        }
+    }
+    val corrPaint = remember(p.good) {
+        android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            typeface = handBold
+            color = p.good.toArgb()
+        }
+    }
+
+    Box(modifier) {
+        Canvas(
+            Modifier.fillMaxSize().pointerInput(Unit) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    val erasing = toolNow == Tool.ERASER
+                    val radius = 18.dp.toPx()
+                    var working = strokesNow
+                    if (erasing) {
+                        eraser = down.position
+                        val next = eraseAt(working, down.position, radius)
+                        if (next !== working) {
+                            working = next
+                            onStrokesNow(next)
+                        }
+                    } else {
+                        active = listOf(PointData(down.position.x, down.position.y, System.currentTimeMillis()))
                     }
-                    Text("اضغط هنا عشان أشرح لك كل غلطة", color = Dark, fontSize = 15.sp)
+                    down.consume()
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                        if (!change.pressed) break
+                        if (change.positionChanged()) {
+                            val pos = change.position
+                            if (erasing) {
+                                eraser = pos
+                                val next = eraseAt(working, pos, radius)
+                                if (next !== working) {
+                                    working = next
+                                    onStrokesNow(next)
+                                }
+                            } else {
+                                active = active + PointData(pos.x, pos.y, System.currentTimeMillis())
+                            }
+                            change.consume()
+                        }
+                    }
+                    if (!erasing && active.isNotEmpty()) onStrokesNow(strokesNow + StrokeData(active))
+                    active = emptyList()
+                    eraser = null
                 }
             }
+        ) {
+            val gap = ROW_GAP_DP.dp.toPx()
+            var y = 0f
+            while (y < size.height) {
+                drawLine(p.rule, Offset(0f, y), Offset(size.width, y), 2.dp.toPx())
+                y += gap
+            }
+
+            demo?.let { d ->
+                drawIntoCanvas { c ->
+                    d.lines.forEach { line -> c.nativeCanvas.drawText(line.text, line.x, line.baseline, demoPaint) }
+                }
+            }
+
+            val inkWidth = 4.2.dp.toPx()
+            strokes.forEach { drawInk(it.points, p.ink, inkWidth) }
+            drawInk(active, p.ink, inkWidth)
+
+            analysis?.findings?.forEach { f ->
+                val a = reveal.value
+                drawRoundRect(
+                    color = Red.copy(alpha = a),
+                    topLeft = f.oval.topLeft,
+                    size = f.oval.size,
+                    cornerRadius = CornerRadius(minOf(f.oval.width, f.oval.height) / 2f),
+                    style = Stroke(2.6.dp.toPx())
+                )
+                corrPaint.textSize = f.corrSize
+                corrPaint.color = p.good.toArgb()
+                corrPaint.alpha = (a * 255f).toInt()
+                drawIntoCanvas { c -> c.nativeCanvas.drawText(f.fix.corrected, f.corrLeft, f.corrBaseline, corrPaint) }
+            }
+
+            eraser?.let { e ->
+                drawCircle(p.muted.copy(alpha = 0.18f), 18.dp.toPx(), e)
+                drawCircle(p.muted, 18.dp.toPx(), e, style = Stroke(1.5.dp.toPx()))
+            }
         }
-        TextButton(onClick = onRetry, Modifier.align(Alignment.CenterHorizontally)) { Text("اكتب جملة جديدة", color = Dark) }
+
+        if (strokes.isEmpty() && demo == null && active.isEmpty() && analysis == null) {
+            Column(
+                Modifier.align(Alignment.Center).padding(horizontal = 36.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text("write anything...", fontSize = 42.sp, fontFamily = Hand, fontWeight = FontWeight.Bold, color = p.muted, textAlign = TextAlign.Center)
+                Text("اكتب أي كلمة أو جملة بالإنجليزي بإيدك، وأنا هصححها قدامك على اللوحة", fontSize = 17.sp, color = p.muted, textAlign = TextAlign.Center, lineHeight = 27.sp)
+            }
+        }
     }
 }
 
 @Composable
-private fun BrandPill() {
-    Box(Modifier.clip(RoundedCornerShape(50)).background(Mint).border(5.dp, Dark, RoundedCornerShape(50)).padding(horizontal = 18.dp, vertical = 10.dp)) {
-        Text("Write Right AI", color = Dark, fontSize = 20.sp, fontWeight = FontWeight.Black)
+private fun StatusBanner(text: String, isError: Boolean, modifier: Modifier) {
+    val p = LocalPalette.current
+    val shape = RoundedCornerShape(16.dp)
+    Box(
+        modifier.padding(horizontal = 16.dp, vertical = 12.dp).fillMaxWidth()
+            .brutal(shape, if (isError) PaleRed else Color(0xFFD9FBEF), p.edge, p.shadow, 2.dp, 3.dp)
+            .padding(horizontal = 14.dp, vertical = 10.dp)
+    ) {
+        Text(text, color = Dark, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
     }
 }
 
 @Composable
-private fun ExplanationPage(fix: WordFix?, index: Int, total: Int, onBack: () -> Unit, onWriteAgain: () -> Unit, onSpeak: (String) -> Unit) {
-    val current = fix ?: WordFix("recieve", "receive", "الخطأ في ترتيب حرفي i و e.", "بعد حرف c ييجي e الأول وبعدها i، زي receive و ceiling.")
-    Box(Modifier.fillMaxSize().background(Color(0x66091A15))) {
-        Column(Modifier.fillMaxWidth().fillMaxHeight(.72f).align(Alignment.BottomCenter).clip(RoundedCornerShape(topStart = 34.dp, topEnd = 34.dp)).background(PaleMint).padding(horizontal = 22.dp, vertical = 18.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-            Box(Modifier.width(70.dp).height(7.dp).clip(CircleShape).background(Dark).align(Alignment.CenterHorizontally))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("━  ━", color = Rule, fontSize = 20.sp)
-                Text("الغلطة " + (index + 1) + " من " + total, color = Dark, fontSize = 23.sp, fontWeight = FontWeight.Black)
+private fun ExampleButton(onClick: () -> Unit) {
+    val p = LocalPalette.current
+    val shape = RoundedCornerShape(50)
+    Row(
+        Modifier.clip(shape).background(Dark, shape).border(2.dp, p.edge, shape).clickable(onClick = onClick)
+            .padding(horizontal = 24.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Icon(Icons.Rounded.ChevronLeft, null, Modifier.size(22.dp), tint = Mint)
+        Text("شوف مثال تصحيح", color = Mint, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+// ------------------------------------------------------------------ results card
+
+@Composable
+private fun ResultCard(analysis: Analysis, onOpen: (Int) -> Unit) {
+    val p = LocalPalette.current
+    val shape = RoundedCornerShape(30.dp)
+    val count = analysis.findings.size
+    Column(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+            .brutal(shape, Mint, p.edge, p.shadow, 2.5.dp, 5.dp)
+            .clip(shape)
+            .clickable(enabled = count > 0) { onOpen(0) }
+            .padding(18.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        if (count == 0) {
+            Text("ممتاز! مفيش أي غلطة", Modifier.fillMaxWidth(), color = Dark, fontSize = 22.sp, fontWeight = FontWeight.Black, textAlign = TextAlign.Right)
+            Text("اكتب جملة تانية وأنا هراجعها", Modifier.fillMaxWidth(), color = Dark, fontSize = 15.sp, textAlign = TextAlign.Right)
+        } else {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.ChevronLeft, null, Modifier.size(30.dp), tint = Dark)
+                Text(mistakesTitle(count), Modifier.weight(1f), color = Dark, fontSize = 22.sp, fontWeight = FontWeight.Black, textAlign = TextAlign.Right)
             }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                WordPill(current.original, PaleRed, Red, true)
-                Text("→", fontSize = 32.sp, color = Dark, fontWeight = FontWeight.Bold)
-                WordPill(current.corrected, Mint, Dark)
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                analysis.findings.forEachIndexed { index, f ->
+                    val chip = RoundedCornerShape(50)
+                    Row(
+                        Modifier.clip(chip).background(Color.White, chip).border(2.5.dp, Dark, chip)
+                            .clickable { onOpen(index) }.padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(f.fix.original, color = Dark, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                        Icon(Icons.Rounded.ArrowForward, null, Modifier.size(16.dp), tint = Dark)
+                        Text(f.fix.corrected, color = Dark, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                    }
+                }
             }
-            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Color.White).border(3.dp, Dark, RoundedCornerShape(22.dp)).padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(current.explanation, Modifier.fillMaxWidth(), color = Muted, textAlign = TextAlign.Center, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
-                    items(current.corrected.toList()) { letter ->
-                        Box(Modifier.size(42.dp).clip(RoundedCornerShape(10.dp)).background(if (current.corrected == "receive" && letter in "ei") Mint else PaleMint).border(3.dp, Dark, RoundedCornerShape(10.dp)), contentAlignment = Alignment.Center) {
-                            Text(letter.toString(), color = Dark, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Text("اضغط هنا عشان أشرح لك كل غلطة", Modifier.fillMaxWidth(), color = Dark, fontSize = 15.sp, textAlign = TextAlign.Right)
+        }
+    }
+}
+
+// ------------------------------------------------------------------ toolbar
+
+@Composable
+private fun EraserIcon(tint: Color) {
+    Canvas(Modifier.size(26.dp)) {
+        val w = 2.2.dp.toPx()
+        rotate(-40f, center) {
+            drawRoundRect(
+                tint, Offset(size.width * 0.18f, size.height * 0.3f), Size(size.width * 0.64f, size.height * 0.4f),
+                CornerRadius(3.dp.toPx()), style = Stroke(w, cap = StrokeCap.Round)
+            )
+            drawLine(tint, Offset(size.width * 0.46f, size.height * 0.3f), Offset(size.width * 0.46f, size.height * 0.7f), w)
+        }
+        drawLine(tint, Offset(size.width * 0.2f, size.height * 0.88f), Offset(size.width * 0.8f, size.height * 0.88f), w, StrokeCap.Round)
+    }
+}
+
+@Composable
+private fun ToolButton(selected: Boolean, description: String, onClick: () -> Unit, content: @Composable () -> Unit) {
+    val p = LocalPalette.current
+    val shape = RoundedCornerShape(16.dp)
+    Box(
+        Modifier.size(52.dp)
+            .background(if (selected) Mint else p.surface, shape)
+            .border(2.5.dp, p.edge, shape)
+            .clip(shape)
+            .clickable(onClick = onClick)
+            .semantics { contentDescription = description },
+        contentAlignment = Alignment.Center
+    ) { content() }
+}
+
+@Composable
+private fun Toolbar(tool: Tool, busy: Boolean, onTool: (Tool) -> Unit, onUndo: () -> Unit, onWatch: () -> Unit) {
+    val p = LocalPalette.current
+    Row(
+        Modifier.fillMaxWidth().padding(start = 16.dp, end = 18.dp, top = 12.dp, bottom = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        val group = RoundedCornerShape(26.dp)
+        Row(
+            Modifier.brutal(group, p.surface, p.edge, p.shadow, 2.5.dp, 4.dp).padding(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            ToolButton(tool == Tool.PEN, "قلم", { onTool(Tool.PEN) }) {
+                Icon(Icons.Rounded.Edit, null, Modifier.size(24.dp), tint = if (tool == Tool.PEN) Dark else p.ink)
+            }
+            ToolButton(tool == Tool.ERASER, "ممحاة", { onTool(Tool.ERASER) }) {
+                EraserIcon(if (tool == Tool.ERASER) Dark else p.ink)
+            }
+            ToolButton(false, "تراجع", onUndo) {
+                Icon(Icons.Rounded.Undo, null, Modifier.size(24.dp), tint = p.ink)
+            }
+        }
+
+        val pill = RoundedCornerShape(50)
+        val pulse = rememberInfiniteTransition(label = "watch")
+        val dotAlpha by pulse.animateFloat(
+            initialValue = 0.3f, targetValue = 1f,
+            animationSpec = infiniteRepeatable(tween(900, easing = LinearEasing), RepeatMode.Reverse),
+            label = "dot"
+        )
+        Row(
+            Modifier.height(56.dp)
+                .brutal(pill, Yellow, p.edge, p.shadow, 2.5.dp, 4.dp)
+                .clip(pill)
+                .clickable(enabled = !busy, onClick = onWatch)
+                .padding(horizontal = 22.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            if (busy) {
+                CircularProgressIndicator(Modifier.size(20.dp), color = Dark, strokeWidth = 2.5.dp)
+                Text("بيقرا خطك...", color = Dark, fontSize = 16.sp, fontWeight = FontWeight.Black)
+            } else {
+                Text("الـ AI بيراقب", color = Dark, fontSize = 16.sp, fontWeight = FontWeight.Black)
+                Box(Modifier.size(12.dp).alpha(dotAlpha).background(Dark, CircleShape))
+            }
+        }
+    }
+}
+
+// ------------------------------------------------------------------ explanation sheet
+
+@Composable
+private fun WordPill(text: String, fill: Color, crossed: Boolean, modifier: Modifier) {
+    val p = LocalPalette.current
+    val shape = RoundedCornerShape(20.dp)
+    Box(
+        modifier.height(56.dp).brutal(shape, fill, p.edge, p.shadow, 2.5.dp, 0.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text, color = Dark, fontSize = if (text.length > 9) 22.sp else 28.sp, fontWeight = FontWeight.Bold,
+            maxLines = 1, overflow = TextOverflow.Clip, modifier = Modifier.padding(horizontal = 10.dp)
+        )
+        if (crossed) {
+            Canvas(Modifier.matchParentSize()) {
+                val inset = 14.dp.toPx()
+                drawLine(Red, Offset(inset, size.height / 2f), Offset(size.width - inset, size.height / 2f), 3.5.dp.toPx(), StrokeCap.Round)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ExplainSheet(
+    fix: WordFix,
+    index: Int,
+    total: Int,
+    onDismiss: () -> Unit,
+    onWriteAgain: () -> Unit,
+    onSpeak: () -> Unit
+) {
+    val p = LocalPalette.current
+    val none = remember { MutableInteractionSource() }
+    val top = RoundedCornerShape(topStart = 36.dp, topEnd = 36.dp)
+
+    Box(Modifier.fillMaxSize().background(Scrim).clickable(interactionSource = none, indication = null, onClick = onDismiss)) {
+        Column(
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth().fillMaxHeight(0.64f)
+                .clip(top).background(p.sheet).border(3.dp, p.edge, top)
+                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {}
+                .padding(start = 22.dp, end = 22.dp, top = 14.dp)
+                .navigationBarsPadding()
+                .padding(bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Box(Modifier.width(48.dp).height(6.dp).background(p.edge, CircleShape).align(Alignment.CenterHorizontally))
+
+            Column(
+                Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                    // RTL progress: mistake 1 sits on the right.
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        for (i in total - 1 downTo 0) {
+                            Box(
+                                Modifier.width(24.dp).height(7.dp)
+                                    .background(if (i == index) p.edge else p.rule, CircleShape)
+                            )
+                        }
+                    }
+                    Text(
+                        "الغلطة ${toArabicDigits(index + 1)} من ${toArabicDigits(total)}",
+                        fontSize = 22.sp, fontWeight = FontWeight.Black, color = p.ink
+                    )
+                }
+
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    WordPill(fix.original, PaleRed, true, Modifier.weight(1f))
+                    Icon(Icons.Rounded.ArrowForward, null, Modifier.size(30.dp), tint = p.ink)
+                    WordPill(fix.corrected, Mint, false, Modifier.weight(1f))
+                }
+
+                val box = RoundedCornerShape(26.dp)
+                Column(
+                    Modifier.fillMaxWidth().brutal(box, p.surface, p.edge, p.shadow, 2.5.dp, 0.dp).padding(14.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(fix.label, color = p.muted, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                        val tileSize = if (fix.corrected.length > 8) 18.sp else 24.sp
+                        val tile = RoundedCornerShape(12.dp)
+                        fix.corrected.forEachIndexed { i, ch ->
+                            val hot = i >= fix.fixStart && i < fix.fixEnd
+                            Box(
+                                Modifier.weight(1f).height(52.dp)
+                                    .background(if (hot) Mint else PaleTile, tile)
+                                    .border(2.5.dp, Dark, tile),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(ch.toString(), color = Dark, fontSize = tileSize, fontWeight = FontWeight.Bold, maxLines = 1)
+                            }
                         }
                     }
                 }
-            }
-            Surface(Modifier.fillMaxWidth(), color = Color(0xFFFFF4C2), shape = RoundedCornerShape(22.dp), border = androidx.compose.foundation.BorderStroke(3.dp, Dark)) {
-                Text("💡  " + current.tip, Modifier.padding(16.dp), color = Dark, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-            }
-            Spacer(Modifier.weight(1f))
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Button(onClick = onWriteAgain, Modifier.weight(1f).height(70.dp), shape = RoundedCornerShape(24.dp), colors = ButtonDefaults.buttonColors(containerColor = Dark, contentColor = Mint)) {
-                    Text("اكتبها تاني على اللوحة  ✎", fontSize = 17.sp, fontWeight = FontWeight.Black)
+
+                val tipShape = RoundedCornerShape(26.dp)
+                Row(
+                    Modifier.fillMaxWidth().brutal(tipShape, TipYellow, p.edge, p.shadow, 2.5.dp, 0.dp).padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(fix.tip, Modifier.weight(1f), color = Dark, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Right, lineHeight = 25.sp)
+                    Icon(Icons.Rounded.Lightbulb, null, Modifier.size(28.dp), tint = Dark)
                 }
-                Box(Modifier.size(70.dp).clip(RoundedCornerShape(20.dp)).background(Color.White).border(4.dp, Dark, RoundedCornerShape(20.dp)).clickable { onSpeak(current.corrected) }, contentAlignment = Alignment.Center) {
-                    Icon(Icons.Rounded.VolumeUp, "Listen", tint = Dark, modifier = Modifier.size(32.dp))
+            }
+
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                val primary = RoundedCornerShape(24.dp)
+                Row(
+                    Modifier.weight(1f).height(64.dp)
+                        .brutal(primary, Dark, Dark, Mint, 2.5.dp, 4.dp)
+                        .clip(primary)
+                        .clickable(onClick = onWriteAgain),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Text("اكتبها تاني على اللوحة", color = Mint, fontSize = 17.sp, fontWeight = FontWeight.Black, maxLines = 1)
+                    Spacer(Modifier.width(10.dp))
+                    Icon(Icons.Rounded.Edit, null, Modifier.size(20.dp), tint = Mint)
+                }
+                val side = RoundedCornerShape(22.dp)
+                Box(
+                    Modifier.size(64.dp)
+                        .brutal(side, p.surface, p.edge, p.shadow, 2.5.dp, 4.dp)
+                        .clip(side)
+                        .clickable(onClick = onSpeak)
+                        .semantics { contentDescription = "سمّع الكلمة" },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Rounded.VolumeUp, null, Modifier.size(30.dp), tint = p.ink)
                 }
             }
         }
-        HeaderIcon(Icons.Rounded.Close, onBack)
-    }
-}
-
-@Composable
-private fun WordPill(text: String, bg: Color, fg: Color, crossed: Boolean = false) {
-    Box(Modifier.clip(RoundedCornerShape(18.dp)).background(bg).border(3.dp, Dark, RoundedCornerShape(18.dp)).padding(horizontal = 13.dp, vertical = 12.dp)) {
-        Text(text, color = fg, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-        if (crossed) Canvas(Modifier.matchParentSize()) {
-            drawLine(Red, Offset(8.dp.toPx(), size.height / 2), Offset(size.width - 8.dp.toPx(), size.height / 2), 4.dp.toPx())
-        }
-    }
-}
-
-private fun correctionList(text: String): List<WordFix> {
-    val rules = mapOf(
-        "recieve" to WordFix("recieve", "receive", "الخطأ في ترتيب حرفي i و e. بعد حرف c يأتي e أولاً ثم i.", "بعد حرف c ييجي e الأول وبعدين i، زي receive و ceiling."),
-        "emale" to WordFix("emale", "email", "الكلمة الصحيحة تُكتب email: e ثم m ثم a ثم i ثم l.", "افتكر شكل كلمة email كلما كتبت رسالة إلكترونية."),
-        "teh" to WordFix("teh", "the", "ترتيب الحروف في the هو t ثم h ثم e.", "كلمة the من أكثر الكلمات استخداماً في الإنجليزية."),
-        "becuase" to WordFix("becuase", "because", "لاحظ ترتيب الحروف في because: b-e-c-a-u-s-e.", "اربط because بمعنى «لأن»."),
-        "wierd" to WordFix("wierd", "weird", "في كلمة weird يأتي e قبل i.", "احفظ شكل الكلمة weird كما هي.")
-    )
-    return text.split(Regex("\\\\s+"))
-        .map { it.trim().trim(',', '.', '!', '?', ';', ':', '"').lowercase(Locale.US) }
-        .filter { rules.containsKey(it) }.distinct().map { rules.getValue(it) }
-}
-
-private fun recognize(
-    context: android.content.Context, strokes: List<StrokeData>,
-    onStatus: (String) -> Unit, onSuccess: (String) -> Unit, onError: (String) -> Unit
-) {
-    val identifier = try { DigitalInkRecognitionModelIdentifier.fromLanguageTag("en-US") } catch (_: Exception) { null }
-    if (identifier == null) { onError("تعذر تجهيز نموذج اللغة الإنجليزية على هذا الجهاز."); return }
-    val model = DigitalInkRecognitionModel.builder(identifier).build()
-    val manager = RemoteModelManager.getInstance()
-
-    fun runRecognition() {
-        try {
-            val inkBuilder = Ink.builder()
-            strokes.forEach { saved ->
-                if (saved.points.isNotEmpty()) {
-                    val strokeBuilder = Ink.Stroke.builder()
-                    saved.points.forEach { p -> strokeBuilder.addPoint(Ink.Point.create(p.x, p.y, p.time)) }
-                    inkBuilder.addStroke(strokeBuilder.build())
-                }
-            }
-            val recognizer: DigitalInkRecognizer = DigitalInkRecognition.getClient(DigitalInkRecognizerOptions.builder(model).build())
-            recognizer.recognize(inkBuilder.build())
-                .addOnSuccessListener { result ->
-                    recognizer.close()
-                    val candidate = result.candidates.firstOrNull()?.text.orEmpty()
-                    if (candidate.isBlank()) onError("لم أستطع قراءة الكتابة بوضوح. جرّب تكتب بشكل أكبر.") else onSuccess(candidate)
-                }
-                .addOnFailureListener { error ->
-                    recognizer.close()
-                    onError("حصلت مشكلة أثناء قراءة الخط: " + (error.localizedMessage ?: "حاول مرة أخرى"))
-                }
-        } catch (error: Exception) {
-            onError("تعذر بدء التعرف على الكتابة: " + (error.localizedMessage ?: "خطأ غير معروف"))
-        }
-    }
-
-    manager.isModelDownloaded(model).addOnSuccessListener { downloaded ->
-        if (downloaded) {
-            onStatus("جاري قراءة خطك...")
-            runRecognition()
-        } else {
-            onStatus("تحميل نموذج الكتابة الإنجليزية لأول مرة (حوالي 20 ميجابايت)...")
-            manager.download(model, DownloadConditions.Builder().build())
-                .addOnSuccessListener { onStatus("تم تجهيز النموذج. جاري قراءة خطك..."); runRecognition() }
-                .addOnFailureListener { error -> onError("لم يكتمل تحميل نموذج التعرف. اتصل بالإنترنت وحاول مرة أخرى. " + (error.localizedMessage ?: "")) }
-        }
-    }.addOnFailureListener { error ->
-        onError("تعذر التحقق من نموذج الكتابة: " + (error.localizedMessage ?: ""))
     }
 }
