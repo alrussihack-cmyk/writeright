@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.VolumeUp
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -23,6 +24,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -32,6 +36,7 @@ import com.writeright.ai.core.design.PageBackground
 import com.writeright.ai.core.design.TextSecondary
 import com.writeright.ai.data.local.entity.LessonEntity
 import com.writeright.ai.data.repository.CourseRepository
+import com.writeright.ai.feature.writing.StylusWritingBoard
 
 @Composable
 fun LessonPreviewScreen(
@@ -43,6 +48,10 @@ fun LessonPreviewScreen(
         value = repository.lesson(lessonId)
     }
     val vocabulary by repository.observeVocabulary(lessonId).collectAsState(initial = emptyList())
+    val exercises by repository.observeExercises(lessonId).collectAsState(initial = emptyList())
+    var exerciseIndex by remember(lessonId) { mutableIntStateOf(0) }
+    val exercise = exercises.getOrNull(exerciseIndex)
+
     Surface(modifier = Modifier.fillMaxSize(), color = PageBackground) {
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(22.dp),
@@ -88,6 +97,41 @@ fun LessonPreviewScreen(
                         Text(word.example)
                         Text(word.exampleMeaningArabic, color = TextSecondary, fontSize = 13.sp)
                     }
+                }
+            }
+            item {
+                Text("WRITE WITH YOUR STYLUS", fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp, fontSize = 12.sp)
+            }
+            if (exercise != null) {
+                item(key = exercise.id) {
+                    Card(shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Text("EXERCISE ${exerciseIndex + 1} OF ${exercises.size}",
+                                color = MaterialTheme.colorScheme.primary, fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold)
+                            Text(exercise.instructionArabic, fontWeight = FontWeight.SemiBold)
+                            if (exercise.promptEnglish.isNotBlank()) {
+                                Text(exercise.promptEnglish, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                            }
+                            StylusWritingBoard()
+                            Text(
+                                "Your handwriting is not checked yet. Automatic recognition will be added in the next step.",
+                                color = TextSecondary, fontSize = 12.sp
+                            )
+                            Button(
+                                onClick = { if (exerciseIndex < exercises.lastIndex) exerciseIndex++ },
+                                enabled = exerciseIndex < exercises.lastIndex,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(if (exerciseIndex < exercises.lastIndex) "Next exercise" else "End of exercises")
+                            }
+                        }
+                    }
+                }
+            } else {
+                item {
+                    Text("No writing exercises are available for this lesson yet.", color = TextSecondary)
                 }
             }
         }
