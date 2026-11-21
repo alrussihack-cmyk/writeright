@@ -1,30 +1,23 @@
-# WriteRight AI — Phase 1 Foundation
+# WriteRight AI — Android MVP
 
-Android-native learning app scaffold for English for Work.
+Android-native English writing coach, starting with English for Work at B1 level.
 
-## Selected architecture
-- Kotlin + Jetpack Compose
-- MVVM-ready feature structure
-- Material 3 UI
-- Offline-first direction
-- Package: `com.writeright.ai`
-- Minimum SDK: 26
+## Build an APK with GitHub Actions
+Every push to `main` starts the **Build Android APK** workflow. You can also start it manually from the Actions tab using **Build Android APK → Run workflow**.
 
-## Open
-1. Install Android Studio with Android SDK Platform 36 and JDK 17.
-2. Open this folder in Android Studio.
-3. Allow Gradle sync.
-4. Run the `app` configuration on an emulator or Android device.
+When the workflow succeeds:
+1. Open the repository's **Actions** tab.
+2. Open the latest **Build Android APK** run.
+3. Find **Artifacts** at the bottom and download `WriteRightAI-debug-apk`.
+4. Extract the ZIP; the APK is inside.
 
-## Phase 1 scope
-- App foundation and theme
-- Basic dashboard
-- Lesson preview screen
-- Navigation between dashboard and lesson
-- Feature-oriented package structure
+The generated file is a debug APK for testing, not a signed Play Store release.
 
-## Not implemented yet
-Room database, seeded curriculum, stylus-only drawing surface, ML Kit Digital Ink, answer evaluation, and progress tracking are scheduled for later phases.
+## Tech stack
+- Kotlin + Jetpack Compose + Material 3
+- Android min SDK 26, compile/target SDK 36
+- Feature-oriented structure, navigation foundation
+- Planned: Room, ML Kit Digital Ink, stylus-only writing board, answer evaluation and progress tracking
 
-## Build note
-This is a source scaffold. It has not been compiled in an Android SDK environment in this session. Resolve any Android Studio/Gradle compatibility prompt before running.
+## Local build
+Open the project in Android Studio with JDK 17 and Android SDK 36, then run the `app` configuration or execute `gradle assembleDebug`.
