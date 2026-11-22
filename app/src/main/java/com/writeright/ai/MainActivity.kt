@@ -73,7 +73,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -114,10 +113,13 @@ private val DarkPalette = Palette(
 )
 private val LocalPalette = staticCompositionLocalOf { LightPalette }
 
+// Plain resource fonts (Typeface.createFromResources path). Variable-font settings are avoided on
+// purpose: they open the raw font file, which can fail on some devices and crash at launch.
 private val Cairo = FontFamily(
-    listOf(400, 600, 700, 900).map { w ->
-        Font(R.font.cairo, FontWeight(w), variationSettings = FontVariation.Settings(FontVariation.weight(w)))
-    }
+    Font(R.font.cairo, FontWeight.Normal),
+    Font(R.font.cairo, FontWeight.SemiBold),
+    Font(R.font.cairo, FontWeight.Bold),
+    Font(R.font.cairo, FontWeight.Black)
 )
 private val Hand = FontFamily(
     Font(R.font.kalam_regular, FontWeight.Normal),
@@ -156,8 +158,14 @@ private fun mistakesChip(n: Int): String = if (n == 1) "١ غلطة" else "${toA
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        CrashLog.install(this)
         enableEdgeToEdge()
-        setContent { WriteRightApp() }
+        setContent {
+            var report by remember { mutableStateOf(CrashLog.read(this@MainActivity)) }
+            val r = report
+            if (r != null) CrashScreen(r) { CrashLog.clear(this@MainActivity); report = null }
+            else WriteRightApp()
+        }
     }
 }
 
